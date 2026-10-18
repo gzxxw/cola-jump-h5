@@ -73,6 +73,7 @@
   }
 
   function boot() {
+    try { if (localStorage.getItem('forceLandscape') === '1') window.FORCE_LANDSCAPE = FORCE_LANDSCAPE = true; } catch (e) {}
     Promise.all([
       loadJSON('assets/data/meshes.json'),
       loadJSON('assets/data/materials.json'),
@@ -97,6 +98,11 @@
         menu: function () { run.state = 'menu'; engine.resetLevel(); if (menuGroup) menuGroup.visible = true; buildMenuScene(); },
         pause: function () { if (run.state === 'play') { run.prevState = 'play'; run.state = 'pause'; } },
         resume: function () { if (run.prevState === 'play') { run.state = 'play'; run.prevState = null; } UI.show('hud'); },
+        orient: function () {
+          window.FORCE_LANDSCAPE = FORCE_LANDSCAPE = !FORCE_LANDSCAPE;
+          try { localStorage.setItem('forceLandscape', FORCE_LANDSCAPE ? '1' : '0'); } catch (e) {}
+          UI.syncOrientLabel(); resize();
+        },
         unlock: function () {
           var sv = UI.save;
           if (sv.coins < 1000) { UI.toast('金币不足'); return; }
@@ -108,6 +114,7 @@
         }
       }, SKINS);
       window.addEventListener('resize', resize);
+      window.addEventListener('orientationchange', function () { setTimeout(resize, 120); });
       bindInput();
       resize();
       clock = new THREE.Clock();
@@ -141,13 +148,14 @@
     camera.lookAt(t);
   }
 
+  window.FORCE_LANDSCAPE = false; var FORCE_LANDSCAPE = false;
+  function isPortrait() { return !FORCE_LANDSCAPE && window.innerHeight > window.innerWidth; }
   function resize() {
     var w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    var vfov = 45;
-    if (camera.aspect > 1.9) vfov = 45 * Math.min(1.2, Math.sqrt(camera.aspect / 1.78));
-    camera.fov = vfov;
+    if (isPortrait()) { camera.fov = 60; }
+    else { var vfov = 45; if (camera.aspect > 1.9) vfov = 45 * Math.min(1.2, Math.sqrt(camera.aspect / 1.78)); camera.fov = vfov; }
     camera.updateProjectionMatrix();
   }
 
@@ -425,16 +433,20 @@
     }
     // 相机
     if (run.state === 'menu' && menuGroup) {
-      camera.position.set(0, 2.0, -4.0);
-      camera.lookAt(new THREE.Vector3(0.2, 1.2, 0));
+      if (isPortrait()) { camera.position.set(0, 2.3, -5.0); camera.lookAt(new THREE.Vector3(0.2, 1.4, 0)); }
+      else { camera.position.set(0, 2.0, -4.0); camera.lookAt(new THREE.Vector3(0.2, 1.2, 0)); }
       camera.updateProjectionMatrix();
     }
     if (!window.__freeCam && (run.state === 'play' || run.state === 'fail' || run.state === 'done')) {
       var targetX = run.player.x - 0.5;
       camera.position.x += (targetX - camera.position.x) * Math.min(1, dt * 8);
-      camera.position.y = 1.6;
-      camera.position.z = -3.2;
-      camera.lookAt(new THREE.Vector3(run.player.x + 0.3, 1.05, 0));
+      if (isPortrait()) {
+        camera.position.y = 2.0; camera.position.z = -4.0;
+        camera.lookAt(new THREE.Vector3(run.player.x + 0.2, 1.1, 0));
+      } else {
+        camera.position.y = 1.6; camera.position.z = -3.2;
+        camera.lookAt(new THREE.Vector3(run.player.x + 0.3, 1.05, 0));
+      }
     }
     if (engine) renderer.render(engine.scene, camera);
   }

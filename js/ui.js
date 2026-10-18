@@ -11,7 +11,7 @@
       self.skins = skins || [];
       self.onPlay = callbacks.play; self.onRetry = callbacks.retry;
       self.onNext = callbacks.next; self.onBack = callbacks.back; self.onMenu = callbacks.menu;
-      self.onUnlock = callbacks.unlock; self.onResume = callbacks.resume;
+      self.onUnlock = callbacks.unlock; self.onResume = callbacks.resume; self.onOrient = callbacks.orient;
       ['loading', 'menu', 'hud', 'fail', 'done', 'settings', 'vitrine'].forEach(function (n) {
         self.screens[n] = document.getElementById('screen-' + n);
       });
@@ -28,12 +28,13 @@
       bind('btn-sound', function () {});
       bind('btn-sound2', function () { self.toggleSound(); });
       bind('btn-vibro', function () { self.toggleVibro(); });
+      bind('btn-orient', function () { self.onOrient && self.onOrient(); });
       bind('btn-retry', function () { self.show('hud'); self.onRetry && self.onRetry(); });
       bind('btn-fail-menu', function () { self.show('menu'); self.onMenu && self.onMenu(); });
       bind('btn-next', function () { self.show('hud'); self.onNext && self.onNext(); });
       bind('btn-done-menu', function () { self.show('menu'); self.onMenu && self.onMenu(); });
       bind('btn-back', function () {});
-      self.syncSoundIcon();
+      self.syncSoundIcon(); self.syncOrientLabel();
     },
     loadSave: function () {
       try {
@@ -104,6 +105,10 @@
         ? 'assets/sprites/sharedassets0.assets__706__IcnVibro.png'
         : 'assets/sprites/sharedassets0.assets__767__IcnVibroOff.png';
       UI.persist();
+    },
+    syncOrientLabel: function () {
+      var l = document.getElementById('lbl-orient');
+      if (l) l.textContent = '横屏模式：' + (window.FORCE_LANDSCAPE ? '开' : '关');
     },
     syncSoundIcon: function () {
       var on = UI.save.sound;
