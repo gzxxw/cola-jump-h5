@@ -79,7 +79,17 @@
         var card = document.createElement('div');
         card.className = 'bottle-card' + (owned.indexOf(sk.name) >= 0 ? ' owned' : ' locked');
         var img = document.createElement('img');
-        img.src = 'assets/textures/' + sk.png;
+        var isOwned = owned.indexOf(sk.name) >= 0;
+        var thumb = (window.__skinThumb && !isOwned) ? window.__skinThumb(sk.png) : null;
+        if (isOwned) {
+          var th2 = window.__skinThumb ? window.__skinThumb(sk.png) : null;
+          img.src = th2 || 'assets/sprites/sharedassets0.assets__702__IcnBottle.png';
+        } else if (thumb) {
+          img.src = thumb;
+        } else {
+          img.src = 'assets/sprites/sharedassets0.assets__702__IcnBottle.png';
+          img.classList.add('sil');
+        }
         img.alt = sk.name;
         card.appendChild(img);
         grid.appendChild(card);

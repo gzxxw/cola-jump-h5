@@ -233,6 +233,13 @@
     var lv = D.levels.levels[Math.max(0, Math.min(D.levels.levels.length - 1, levelNum - 1))];
     var seq = [];
     seq.push(D.prefabs.Room_Empty);
+    var fixed = D.prefabs.fixed || [];
+    if (!(lv.rooms && lv.rooms.length) && fixed.length) {
+      // 教程关（levelsNums 为空）：原版用手工固定房间，9 间/关
+      var half = Math.ceil(fixed.length / 2);
+      var part = (levelNum <= 1) ? fixed.slice(0, half) : fixed.slice(half, half * 2);
+      part.forEach(function (p) { seq.push(p); });
+    }
     (lv.rooms || []).forEach(function (name) {
       var seg = null;
       for (var i = 0; i < D.prefabs.segments.length; i++) { if (D.prefabs.segments[i].name === name) { seg = D.prefabs.segments[i]; break; } }
@@ -433,19 +440,19 @@
     }
     // 相机
     if (run.state === 'menu' && menuGroup) {
-      if (isPortrait()) { camera.position.set(0, 2.3, -5.0); camera.lookAt(new THREE.Vector3(0.2, 1.4, 0)); }
-      else { camera.position.set(0, 2.0, -4.0); camera.lookAt(new THREE.Vector3(0.2, 1.2, 0)); }
+      if (isPortrait()) { camera.position.set(0, 3.4, -12.5); camera.lookAt(new THREE.Vector3(0, 2.6, 0)); }
+      else { camera.position.set(0, 2.8, -10.0); camera.lookAt(new THREE.Vector3(0, 2.2, 0)); }
       camera.updateProjectionMatrix();
     }
     if (!window.__freeCam && (run.state === 'play' || run.state === 'fail' || run.state === 'done')) {
-      var targetX = run.player.x - 0.5;
+      var targetX = run.player.x + 0.7;
       camera.position.x += (targetX - camera.position.x) * Math.min(1, dt * 8);
       if (isPortrait()) {
-        camera.position.y = 2.0; camera.position.z = -4.0;
-        camera.lookAt(new THREE.Vector3(run.player.x + 0.2, 1.1, 0));
+        camera.position.y = 2.2; camera.position.z = -4.6;
+        camera.lookAt(new THREE.Vector3(run.player.x + 1.6, 1.25, 0));
       } else {
-        camera.position.y = 1.6; camera.position.z = -3.2;
-        camera.lookAt(new THREE.Vector3(run.player.x + 0.3, 1.05, 0));
+        camera.position.y = 1.8; camera.position.z = -3.6;
+        camera.lookAt(new THREE.Vector3(run.player.x + 1.4, 1.15, 0));
       }
     }
     if (engine) renderer.render(engine.scene, camera);
@@ -487,5 +494,40 @@
     camera.position.set(x, y, z); camera.up.set(0, 1, 0); camera.lookAt(new THREE.Vector3(tx, ty, tz));
     camera.updateProjectionMatrix(); window.__camTest = [x,y,z,tx,ty,tz];
   };
+  var thumbCache = {};
+  function skinThumb(png) {
+    if (thumbCache[png] !== undefined) return thumbCache[png];
+    try {
+      var geo = null;
+      for (var i = 0; i < D.prefabs.Player.meshes.length; i++) {
+        var im = D.prefabs.Player.meshes[i];
+        if (im.node === 'Bottle_1') { geo = engine.geometry(im.m); break; }
+      }
+      if (!geo) { thumbCache[png] = null; return null; }
+      var sc = new THREE.Scene();
+      sc.add(new THREE.HemisphereLight(0xffffff, 0x999999, 1.25));
+      var dl = new THREE.DirectionalLight(0xffffff, 0.95); dl.position.set(2, 3, -3); sc.add(dl);
+      var mat = new THREE.MeshStandardMaterial({ map: engine.texture('textures/' + png), roughness: 0.55, metalness: 0.05 });
+      var mesh = new THREE.Mesh(geo, mat);
+      geo.computeBoundingBox();
+      var bb = geo.boundingBox, ctr = bb.getCenter(new THREE.Vector3());
+      mesh.position.set(-ctr.x, -ctr.y, -ctr.z);
+      sc.add(mesh);
+      var cam = new THREE.PerspectiveCamera(30, 96 / 128, 0.05, 50);
+      cam.position.set(0, 0, -3.0); cam.lookAt(new THREE.Vector3(0, 0, 0));
+      var rt = new THREE.WebGLRenderTarget(96, 128);
+      renderer.setRenderTarget(rt); renderer.render(sc, cam); renderer.setRenderTarget(null);
+      var buf = new Uint8Array(96 * 128 * 4);
+      renderer.readRenderTargetPixels(rt, 0, 0, 96, 128, buf);
+      var cv = document.createElement('canvas'); cv.width = 96; cv.height = 128;
+      var ctx = cv.getContext('2d'); var img2 = ctx.createImageData(96, 128);
+      for (var y = 0; y < 128; y++) img2.data.set(buf.subarray((127 - y) * 96 * 4, (128 - y) * 96 * 4), y * 96 * 4);
+      ctx.putImageData(img2, 0, 0);
+      var url = cv.toDataURL('image/png');
+      rt.dispose(); thumbCache[png] = url;
+      return url;
+    } catch (e) { thumbCache[png] = null; return null; }
+  }
+  window.__skinThumb = skinThumb;
   window.addEventListener('DOMContentLoaded', boot);
 })();
