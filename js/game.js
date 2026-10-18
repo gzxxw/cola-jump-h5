@@ -1,0 +1,386 @@
+/* 可乐跳跳瓶 H5 复刻 — 主逻辑
+ * 物理/数值来源：APK IL2CPP 反编译 + prefab 序列化数据
+ *  PlayerBottleManager: firstKickPower=1, firstKickVector=(2.615,11.138,0),
+ *  secondKickPower=1, secondKickVector=(2.615,11.138,0), flips=2,
+ *  torqPower=-720, overshootTimeKoeff=1.6, gravity=25.082, speedKoeff=1
+ *  CamTrack: trackingObject=Player, offset=(-1,0,0); CamFov: 60/1080x1920
+ */
+(function () {
+  'use strict';
+  var THREE = window.THREE;
+  var D = null, engine = null, renderer = null, camera = null, clock = null;
+  var bottle = null, bottleSpin = { angle: 0, target: 0, start: 0, t: 0, dur: 0, active: false };
+  var run = {
+    state: 'loading',   // loading | menu | play | fail | done
+    level: 1,
+    rooms: [], colliders: [], coins: [], coinSprites: [],
+    spawn: { x: 0, y: 2, z: 0.182 },
+    finishX: 0, minY: -6,
+    player: { x: 0, y: 2, z: 0.182, vx: 0, vy: 0, onGround: false, jumps: 0 },
+    coinsGot: 0,
+    lastTap: 0, tapHintTimer: 0
+  };
+  var CONST = {
+    kick: { x: 2.615, y: 11.138 },
+    gravity: 25.082,
+    flips: 2,
+    overshoot: 1.6,
+    halfH: 0.395, halfW: 0.13,
+    camOffset: { x: -1, y: 4.3, z: -8 },
+    camFov: 60,
+    baseAspect: 1080 / 1920
+  };
+  var keys = {};
+
+  function loadJSON(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(url); return r.json(); }); }
+
+  function setLoading(p) {
+    var el = document.querySelector('.loading-fill');
+    if (el) el.style.width = Math.round(p * 100) + '%';
+  }
+
+  function boot() {
+    Promise.all([
+      loadJSON('assets/data/meshes.json'),
+      loadJSON('assets/data/materials.json'),
+      loadJSON('assets/data/prefabs.json'),
+      loadJSON('assets/data/levels.json'),
+      loadJSON('assets/data/room_order.json')
+    ]).then(function (res) {
+      D = { meshes: res[0], materials: res[1], prefabs: res[2], levels: res[3], roomOrder: res[4] };
+      setLoading(0.5);
+      initRenderer();
+      engine = new Engine(THREE, D);
+      engine.renderer = renderer;
+      window.__engineRef = engine; window.__renderer = renderer;
+      engine.scene.background = new THREE.Color(0.8479, 0.8961, 0.9717);
+      buildBottle();
+      setLoading(0.8);
+      UI.init({
+        play: function () { startLevel(UI.save.level); },
+        retry: function () { startLevel(run.level); },
+        next: function () { UI.save.level = Math.min(500, run.level + 1); UI.persist(); startLevel(UI.save.level); },
+        back: function () { run.state = 'menu'; engine.resetLevel(); },
+        menu: function () { run.state = 'menu'; engine.resetLevel(); }
+      });
+      window.addEventListener('resize', resize);
+      bindInput();
+      resize();
+      clock = new THREE.Clock();
+      UI.show('menu');
+      run.state = 'menu';
+      setLoading(1);
+      animate();
+    }).catch(function (e) {
+      console.error(e);
+      document.querySelector('.loading-text').textContent = 'ERROR: ' + e.message;
+    });
+  }
+
+  function initRenderer() {
+    var canvas = document.getElementById('game-canvas');
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false,
+      preserveDrawingBuffer: /capture/.test(location.search) });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    if (THREE.SRGBColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
+    else if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+    camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.3, 1000);
+    camera.position.set(0, 4.0, -9.5);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(new THREE.Vector3(2.5, 1.3, 0));
+  }
+
+  function lookForward(fx, fy, fz) {
+    var t = new THREE.Vector3(camera.position.x + fx * 100, camera.position.y + fy * 100, camera.position.z + fz * 100);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(t);
+  }
+
+  function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    // 横屏：保持垂直 42°，超宽屏时略微放大垂直视角避免裁切
+    var vfov = 42;
+    if (camera.aspect > 1.9) vfov = 42 * Math.min(1.25, Math.sqrt(camera.aspect / 1.78));
+    camera.fov = vfov;
+    camera.updateProjectionMatrix();
+  }
+
+  function bottleMaterialFromNode(matId) { return engine.material(matId); }
+
+  function buildBottle() {
+    var P = D.prefabs.Player;
+    bottle = new THREE.Group();
+    var seenBody = 0;
+    for (var i = 0; i < P.meshes.length; i++) {
+      var inst = P.meshes[i];
+      // BottleDefault_new 是备用皮，跳过避免重叠
+      if (inst.node === 'Bottle_1') {
+        seenBody++;
+        if (seenBody === 1) continue; // 第一份是 BottleDefault_new 里的
+      }
+      var obj = engine.meshObject(inst);
+      if (!obj) continue;
+      var m = new THREE.Matrix4();
+      m.set(inst.x[0], inst.x[1], inst.x[2], inst.x[3], inst.x[4], inst.x[5], inst.x[6], inst.x[7],
+            inst.x[8], inst.x[9], inst.x[10], inst.x[11], inst.x[12], inst.x[13], inst.x[14], inst.x[15]);
+      obj.matrixAutoUpdate = false; obj.matrix.copy(m); obj.matrixWorldNeedsUpdate = true;
+      bottle.add(obj);
+    }
+    bottle.userData.node = 'player';
+    engine.scene.add(bottle);
+    bottle.visible = false;
+  }
+
+  function roomLength(p) {
+    var e = p.points && p.points.EndPoint;
+    return (e && e[0] > 0) ? e[0] : 10;
+  }
+
+  function buildLevel(levelNum) {
+    engine.resetLevel();
+    run.coins = []; run.coinSprites = [];
+    var lv = D.levels.levels[Math.max(0, Math.min(D.levels.levels.length - 1, levelNum - 1))];
+    var seq = [];
+    seq.push(D.prefabs.Room_Empty);
+    (lv.rooms || []).forEach(function (name) {
+      var seg = null;
+      for (var i = 0; i < D.prefabs.segments.length; i++) { if (D.prefabs.segments[i].name === name) { seg = D.prefabs.segments[i]; break; } }
+      if (seg) seq.push(seg);
+    });
+    if (D.prefabs.Room_Finish) seq.push(D.prefabs.Room_Finish);
+    var cursor = 0;
+    run.rooms = [];
+    for (var i = 0; i < seq.length; i++) {
+      var prefab = seq[i];
+      var built = engine.addPrefab(prefab, cursor, 0, 0);
+      run.rooms.push({ prefab: prefab, x: cursor });
+      // 金币
+      (prefab.coins || []).forEach(function (c) {
+        run.coins.push({ x: cursor + c.pos[0], y: c.pos[1], z: c.pos[2] || 0.18, taken: false });
+      });
+      cursor += roomLength(prefab);
+    }
+    var lastStart = 0, lastPrefab = null;
+    (function () { var acc = 0; for (var i2 = 0; i2 < seq.length; i2++) { acc += roomLength(seq[i2]); lastStart = acc - roomLength(seq[i2]); lastPrefab = seq[i2]; } })();
+    var fp = (lastPrefab && lastPrefab.points && lastPrefab.points.FinishPos) || [4, 1.5, 0];
+    run.finishX = lastStart + fp[0];
+    run.colliders = engine.boxColliders;
+    // 出生点
+    var sp = (D.prefabs.Room_Empty.points && D.prefabs.Room_Empty.points.SpawnPoint) || [1.4, 6, 0.182];
+    run.spawn = { x: sp[0], y: sp[1], z: sp[2] || 0.182 };
+    // 金币 sprite
+    var coinTex = engine.texture('sprites/sharedassets0.assets__717__IcnCap.png');
+    for (var ci = 0; ci < run.coins.length; ci++) {
+      var c = run.coins[ci];
+      var mat = new THREE.SpriteMaterial({ map: coinTex, transparent: true, depthWrite: false });
+      var spr = new THREE.Sprite(mat);
+      spr.position.set(c.x, c.y, c.z);
+      spr.scale.set(0.8, 0.8, 1);
+      spr.visible = false;
+      engine.scene.add(spr);
+      run.coinSprites.push(spr);
+    }
+    // 显示金币
+    for (var k = 0; k < run.coinSprites.length; k++) run.coinSprites[k].visible = true;
+  }
+
+  function startLevel(n) {
+    run.level = Math.max(1, Math.min(500, n));
+    UI.save.level = run.level; UI.persist();
+    buildLevel(run.level);
+    run.player = { x: run.spawn.x, y: run.spawn.y, z: run.spawn.z, vx: 0, vy: 0, onGround: false, jumps: 0 };
+    bottleSpin = { angle: 0, target: 0, start: 0, t: 0, dur: 0, active: false };
+    bottle.visible = true;
+    run.coinsGot = 0;
+    run.blockedTime = 0;
+    run.state = 'play';
+    UI.setHud(run.level, 0);
+    UI.show('hud');
+    document.getElementById('tap-hint').style.display = 'block';
+    camera.position.set(run.player.x + CONST.camOffset.x, CONST.camOffset.y, CONST.camOffset.z);
+  }
+
+  function tap() {
+    if (run.state !== 'play') return;
+    var p = run.player;
+    if (p.onGround || p.jumps < CONST.flips) {
+      p.vx = CONST.kick.x;
+      p.vy = CONST.kick.y;
+      p.onGround = false;
+      p.jumps++;
+      // 旋转：一次完整翻转，时长 = |vy|/gravity*overshoot
+      bottleSpin.dur = Math.abs(p.vy) / CONST.gravity * CONST.overshoot;
+      bottleSpin.t = 0;
+      bottleSpin.start = bottleSpin.angle;
+      bottleSpin.target = bottleSpin.angle - 360;
+      bottleSpin.active = true;
+      Sound.play('jump');
+      document.getElementById('tap-hint').style.display = 'none';
+    }
+  }
+
+  function aabbOfBottle(p) {
+    return { minX: p.x - CONST.halfW, maxX: p.x + CONST.halfW,
+             minY: p.y - CONST.halfH, maxY: p.y + CONST.halfH,
+             minZ: p.z - CONST.halfW, maxZ: p.z + CONST.halfW };
+  }
+
+  function physicsStep(dt) {
+    var p = run.player;
+    var prev = { x: p.x, y: p.y };
+    if (!p.onGround) p.vy -= CONST.gravity * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    var landed = false, blocked = false;
+    for (var i = 0; i < run.colliders.length; i++) {
+      var c = run.colliders[i];
+      if (!c.min) continue;
+      var halfW = CONST.halfW, halfH = CONST.halfH;
+      var bb = { minX: p.x - halfW, maxX: p.x + halfW, minY: p.y - halfH, maxY: p.y + halfH,
+                 minZ: p.z - halfW, maxZ: p.z + halfW };
+      var ox = Math.min(bb.maxX, c.max[0]) - Math.max(bb.minX, c.min[0]);
+      var oy = Math.min(bb.maxY, c.max[1]) - Math.max(bb.minY, c.min[1]);
+      var oz = Math.min(bb.maxZ, c.max[2]) - Math.max(bb.minZ, c.min[2]);
+      if (ox <= 0 || oy <= 0 || oz <= 0) continue;
+      var boxCY = (c.min[1] + c.max[1]) / 2;
+      var fromTop = (p.y > boxCY) && (prev.y - halfH >= c.max[1] - 0.12 || p.vy <= 0);
+      if (oy <= ox * 1.05 && oy <= oz * 1.05) {
+        if (fromTop) { p.y = c.max[1] + halfH; p.vy = 0; landed = true; }
+        else if (p.vy > 0) { p.y = c.min[1] - halfH; p.vy = 0; }
+        else { p.y = c.max[1] + halfH; p.vy = 0; landed = true; }
+      } else {
+        var gap = c.max[1] - (p.y - CONST.halfH);      // 障碍顶面高出脚底多少
+        if (gap <= 0.85) {                              // 可迈上的台阶/家具沿
+          p.y = c.max[1] + CONST.halfH;
+          p.vy = 0; landed = true;
+        } else {                                        // 太高的侧墙：阻挡
+          if (Math.abs(p.x - prev.x) < 1e-6 || p.vx > 0) p.x = c.min[0] - CONST.halfW - 0.001;
+          else p.x = c.max[0] + CONST.halfW + 0.001;
+          p.vx = 0; blocked = true;
+          if (p.vy > 0) p.vy = 0;
+        }
+      }
+    }
+    if (landed) {
+      p.onGround = true; p.jumps = 0; p.vx = 0; p.vy = 0;
+      run.blockedTime = 0;
+      bottleSpin.angle = Math.round(bottleSpin.angle / 360) * 360;
+      bottleSpin.active = false;
+      Sound.play('land');
+    } else if (blocked) {
+      p.onGround = false;
+      run.blockedTime = (run.blockedTime || 0) + dt;
+      if (run.blockedTime > 4.0) { die('stuck'); return; }
+    } else {
+      p.onGround = false;
+      run.blockedTime = 0;
+    }
+    if (p.y < run.minY) { die('fall'); return; }
+    // 金币
+    for (var q = 0; q < run.coins.length; q++) {
+      var co = run.coins[q];
+      if (co.taken) continue;
+      var dx = co.x - p.x, dy = co.y - p.y;
+      if (dx * dx + dy * dy < 1.1) {
+        co.taken = true; run.coinsGot++; Sound.play('coin');
+        run.coinSprites[q].visible = false;
+        UI.setHud(run.level, run.coinsGot);
+      }
+    }
+    if (p.x >= run.finishX && run.state === 'play') { win(); return; }
+  }
+
+  function updateSpin(dt) {
+    if (!bottleSpin.active) return;
+    bottleSpin.t += dt;
+    var t = Math.min(1, bottleSpin.t / bottleSpin.dur);
+    // 缓出（easeOutQuart，对应原版 easeOQuart / overshoot）
+    var e = 1 - Math.pow(1 - t, 4);
+    bottleSpin.angle = bottleSpin.start + (bottleSpin.target - bottleSpin.start) * e;
+    if (t >= 1) { bottleSpin.start = bottleSpin.target; bottleSpin.active = false; }
+  }
+
+  function die(reason) {
+    if (run.state !== 'play') return;
+    run.state = 'fail';
+    Sound.play('fail');
+    bottle.visible = true;
+    UI.show('fail');
+  }
+
+  function win() {
+    if (run.state !== 'play') return;
+    run.state = 'done';
+    Sound.play('done');
+    UI.save.coins += run.coinsGot;
+    UI.save.level = Math.min(500, run.level + 1);
+    UI.persist();
+    UI.setDone(run.coinsGot);
+    UI.show('done');
+  }
+
+  window.__frames = 0;
+  function animate() {
+    requestAnimationFrame(animate);
+    window.__frames++;
+    var dt = Math.min(0.05, clock.getDelta());
+    if (run.state === 'play') {
+      var steps = Math.max(1, Math.ceil(dt / (1 / 120)));
+      for (var s = 0; s < steps; s++) { physicsStep(dt / steps); if (run.state !== 'play') break; }
+      if (run.state === 'play') updateSpin(dt);
+    }
+    if (bottle) {
+      bottle.position.set(run.player.x, run.player.y, run.player.z);
+      bottle.rotation.z = bottleSpin.angle * Math.PI / 180;
+    }
+    // 相机跟随（CamTrack：仅 X 跟随，offset.x=-1）
+    if (!window.__freeCam && (run.state === 'play' || run.state === 'fail' || run.state === 'done')) {
+      var targetX = run.player.x - 1;
+      camera.position.x += (targetX - camera.position.x) * Math.min(1, dt * 6);
+      camera.position.y = 4.0;
+      camera.position.z = -9.5;
+      camera.lookAt(new THREE.Vector3(run.player.x + 2.5, 1.3, 0));
+    }
+    if (engine) renderer.render(engine.scene, camera);
+  }
+
+  function bindInput() {
+    var stage = document.getElementById('stage');
+    stage.addEventListener('pointerdown', function (e) {
+      if (run.state === 'play') { tap(); }
+    });
+    window.addEventListener('keydown', function (e) {
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.key === ' ') {
+        e.preventDefault();
+        if (run.state === 'play') tap();
+      }
+      if (e.code === 'KeyR' && run.state === 'play') startLevel(run.level);
+    });
+    window.addEventListener('keyup', function () {});
+  }
+
+  window.__engineRef = null;
+  window.__renderer = null;
+  window.__dbg = function () {
+    if (!engine) return null;
+    var box = new THREE.Box3();
+    engine.roomGroup.traverse(function (o) { if (o.isMesh) box.expandByObject(o); });
+    var dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    return {
+      camPos: [camera.position.x, camera.position.y, camera.position.z],
+      camDir: [dir.x, dir.y, dir.z], fov: camera.fov,
+      roomBox: box.isEmpty() ? null : { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] },
+      player: [run.player.x, run.player.y, run.player.z], state: run.state, og: run.player.onGround, jumps: run.player.jumps, blocked: run.blockedTime||0,
+      rooms: run.rooms.length, colliders: run.colliders.length,
+      camTarget: (window.__camTest||null)
+    };
+  };
+  window.__setCam = function (x, y, z, tx, ty, tz) {
+    window.__freeCam = true;
+    camera.position.set(x, y, z); camera.up.set(0, 1, 0); camera.lookAt(new THREE.Vector3(tx, ty, tz));
+    camera.updateProjectionMatrix(); window.__camTest = [x,y,z,tx,ty,tz];
+  };
+  window.addEventListener('DOMContentLoaded', boot);
+})();

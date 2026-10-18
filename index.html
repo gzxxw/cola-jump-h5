@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Bottle Jump 3D — APK 复刻</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game-canvas"></canvas>
+    <div id="ui-root">
+      <!-- 加载 -->
+      <section class="screen" id="screen-loading">
+        <div class="loading-bar"><div class="loading-fill"></div></div>
+        <div class="loading-text">LOADING…</div>
+      </section>
+      <!-- 主菜单 -->
+      <section class="screen hidden" id="screen-menu">
+        <img class="menu-bg" src="assets/sprites/sharedassets0.assets__727__BgForScreen.png" alt="">
+        <img class="menu-logo" src="assets/sprites/sharedassets0.assets__737__BgGameLogo.png" alt="">
+        <div class="menu-level">LEVEL <span id="menu-level-num">1</span></div>
+        <button class="btn-play" id="btn-play">
+          <img src="assets/sprites/sharedassets0.assets__744__BtnGreenBack.png" alt="">
+          <span>PLAY</span>
+        </button>
+        <div class="menu-coins">
+          <img src="assets/sprites/sharedassets0.assets__717__IcnCap.png" alt="">
+          <span id="menu-coins">0</span>
+        </div>
+        <div class="menu-gems">
+          <img src="assets/sprites/sharedassets0.assets__697__Gem.png" alt="">
+          <span id="menu-gems">0</span>
+        </div>
+        <button class="icon-btn menu-settings" id="btn-settings"><img src="assets/sprites/sharedassets0.assets__692__IcnSettings.png" alt=""></button>
+        <button class="icon-btn menu-sound" id="btn-sound"><img id="img-sound" src="assets/sprites/sharedassets0.assets__742__IcnSoundOn.png" alt=""></button>
+      </section>
+      <!-- 关卡内 HUD -->
+      <section class="screen hidden" id="screen-hud">
+        <div class="hud-level">LEVEL <span id="hud-level-num">1</span></div>
+        <div class="hud-coins"><img src="assets/sprites/sharedassets0.assets__717__IcnCap.png" alt=""><span id="hud-coins">0</span></div>
+        <button class="icon-btn hud-back" id="btn-back"><img src="assets/sprites/sharedassets0.assets__716__IcnBack.png" alt=""></button>
+        <div class="tap-hint" id="tap-hint">TAP TO JUMP</div>
+      </section>
+      <!-- 失败 -->
+      <section class="screen hidden" id="screen-fail">
+        <div class="modal">
+          <div class="modal-title">OH NO!</div>
+          <div class="modal-sub">BOTTLE DIED</div>
+          <button class="btn-modal" id="btn-retry"><img src="assets/sprites/sharedassets0.assets__744__BtnGreenBack.png" alt=""><span>RETRY</span></button>
+          <button class="btn-modal small" id="btn-fail-menu"><img src="assets/sprites/sharedassets0.assets__725__BtnLongWhite.png" alt=""><span>MENU</span></button>
+        </div>
+      </section>
+      <!-- 过关 -->
+      <section class="screen hidden" id="screen-done">
+        <div class="modal">
+          <div class="modal-title">LEVEL COMPLETE</div>
+          <div class="modal-sub" id="done-coins">+0</div>
+          <button class="btn-modal" id="btn-next"><img src="assets/sprites/sharedassets0.assets__744__BtnGreenBack.png" alt=""><span>NEXT</span></button>
+          <button class="btn-modal small" id="btn-done-menu"><img src="assets/sprites/sharedassets0.assets__725__BtnLongWhite.png" alt=""><span>MENU</span></button>
+        </div>
+      </section>
+      <!-- 设置 -->
+      <section class="screen hidden" id="screen-settings">
+        <div class="modal settings">
+          <div class="modal-title">SETTINGS</div>
+          <button class="btn-toggle" id="btn-sound2"><img id="img-sound2" src="assets/sprites/sharedassets0.assets__742__IcnSoundOn.png" alt=""><span>SOUND</span></button>
+          <button class="btn-toggle" id="btn-vibro"><img id="img-vibro" src="assets/sprites/sharedassets0.assets__706__IcnVibro.png" alt=""><span>VIBRATION</span></button>
+          <button class="btn-close" id="btn-settings-close"><img src="assets/sprites/sharedassets0.assets__723__IcnClose.png" alt=""></button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+<script src="js/three.min.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
