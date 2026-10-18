@@ -30,6 +30,39 @@
     camFov: 60,
     baseAspect: 1080 / 1920
   };
+  var SKINS = [
+    {name:'Bottle_1', png:'sharedassets0.assets__245__Bottle_1.png'},
+    {name:'SimpleBottle_1', png:'sharedassets0.assets__248__SimpleBottle_1.png'},
+    {name:'SimpleBottle_2', png:'sharedassets0.assets__209__SimpleBottle_2.png'},
+    {name:'SimpleBottle_3', png:'sharedassets0.assets__247__SimpleBottle_3.png'},
+    {name:'SimpleBottle_4', png:'sharedassets0.assets__154__SimpleBottle_4.png'},
+    {name:'SimpleBottle_5', png:'sharedassets0.assets__196__SimpleBottle_5.png'},
+    {name:'SimpleBottle_6', png:'sharedassets0.assets__100__SimpleBottle_6.png'},
+    {name:'SimpleBottle_7', png:'sharedassets0.assets__186__SimpleBottle_7.png'},
+    {name:'SimpleBottle_8', png:'sharedassets0.assets__246__SimpleBottle_8.png'},
+    {name:'SimpleBottle_9', png:'sharedassets0.assets__244__SimpleBottle_9.png'},
+    {name:'SimpleBottle_10', png:'sharedassets0.assets__243__SimpleBottle_10.png'},
+    {name:'SimpleBottle_11', png:'sharedassets0.assets__151__SimpleBottle_11.png'},
+    {name:'SimpleBottle_12', png:'sharedassets0.assets__136__SimpleBottle_12.png'},
+    {name:'SimpleBottle_13', png:'sharedassets0.assets__156__SimpleBottle_13.png'},
+    {name:'SimpleBottle_14', png:'sharedassets0.assets__234__SimpleBottle_14.png'},
+    {name:'SimpleBottle_15', png:'sharedassets0.assets__108__SimpleBottle_15.png'},
+    {name:'SimpleBottle_16', png:'sharedassets0.assets__165__SimpleBottle_16.png'},
+    {name:'SimpleBottle_17', png:'sharedassets0.assets__199__SimpleBottle_17.png'},
+    {name:'SimpleBottle_18', png:'sharedassets0.assets__140__SimpleBottle_18.png'},
+    {name:'SimpleBottle_19', png:'sharedassets0.assets__138__SimpleBottle_19.png'},
+    {name:'SimpleBottle_20', png:'sharedassets0.assets__147__SimpleBottle_20.png'},
+    {name:'SimpleBottle_21', png:'sharedassets0.assets__230__SimpleBottle_21.png'},
+    {name:'SimpleBottle_22', png:'sharedassets0.assets__228__SimpleBottle_22.png'},
+    {name:'SimpleBottle_23', png:'sharedassets0.assets__169__SimpleBottle_23.png'},
+    {name:'SimpleBottle_24', png:'sharedassets0.assets__242__SimpleBottle_24.png'},
+    {name:'SimpleBottle_25', png:'sharedassets0.assets__202__SimpleBottle_25.png'},
+    {name:'SimpleBottle_26', png:'sharedassets0.assets__212__SimpleBottle_26.png'},
+    {name:'VIPBottle_1', png:'sharedassets0.assets__112__VIPBottle_1.png'},
+    {name:'VIPBottle_2', png:'sharedassets0.assets__204__VIPBottle_2.png'},
+    {name:'VIPBottle_3', png:'sharedassets0.assets__197__VIPBottle_3.png'},
+    {name:'BottleVIP_golden', png:'sharedassets0.assets__238__BottleVIP_golden.png'}
+  ];
   var keys = {};
 
   function loadJSON(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(url); return r.json(); }); }
@@ -60,13 +93,25 @@
         play: function () { startLevel(UI.save.level); },
         retry: function () { startLevel(run.level); },
         next: function () { UI.save.level = Math.min(500, run.level + 1); UI.persist(); startLevel(UI.save.level); },
-        back: function () { run.state = 'menu'; engine.resetLevel(); },
-        menu: function () { run.state = 'menu'; engine.resetLevel(); }
-      });
+        back: function () { run.state = 'menu'; engine.resetLevel(); if (menuGroup) menuGroup.visible = true; buildMenuScene(); },
+        menu: function () { run.state = 'menu'; engine.resetLevel(); if (menuGroup) menuGroup.visible = true; buildMenuScene(); },
+        pause: function () { if (run.state === 'play') { run.prevState = 'play'; run.state = 'pause'; } },
+        resume: function () { if (run.prevState === 'play') { run.state = 'play'; run.prevState = null; } UI.show('hud'); },
+        unlock: function () {
+          var sv = UI.save;
+          if (sv.coins < 1000) { UI.toast('金币不足'); return; }
+          var locked = UI.skins.filter(function (sk) { return (sv.owned || []).indexOf(sk.name) < 0; });
+          if (!locked.length) { UI.toast('已全部解锁'); return; }
+          var pick = locked[Math.floor(Math.random() * locked.length)];
+          sv.coins -= 1000; sv.owned.push(pick.name); UI.persist();
+          UI.renderVitrine(); UI.toast('解锁: ' + pick.name);
+        }
+      }, SKINS);
       window.addEventListener('resize', resize);
       bindInput();
       resize();
       clock = new THREE.Clock();
+      buildMenuScene();
       UI.show('menu');
       run.state = 'menu';
       setLoading(1);
@@ -84,10 +129,10 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     if (THREE.SRGBColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
     else if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-    camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.3, 1000);
-    camera.position.set(0, 4.0, -9.5);
+    camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.3, 1000);
+    camera.position.set(0, 1.6, -3.2);
     camera.up.set(0, 1, 0);
-    camera.lookAt(new THREE.Vector3(2.5, 1.3, 0));
+    camera.lookAt(new THREE.Vector3(0.3, 1.05, 0));
   }
 
   function lookForward(fx, fy, fz) {
@@ -100,14 +145,50 @@
     var w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // 横屏：保持垂直 42°，超宽屏时略微放大垂直视角避免裁切
-    var vfov = 42;
-    if (camera.aspect > 1.9) vfov = 42 * Math.min(1.25, Math.sqrt(camera.aspect / 1.78));
+    var vfov = 45;
+    if (camera.aspect > 1.9) vfov = 45 * Math.min(1.2, Math.sqrt(camera.aspect / 1.78));
     camera.fov = vfov;
     camera.updateProjectionMatrix();
   }
 
   function bottleMaterialFromNode(matId) { return engine.material(matId); }
+
+  var menuGroup = null;
+  function buildMenuScene() {
+    if (!engine || menuGroup) return;
+    menuGroup = new THREE.Group();
+    // 砖墙（原版墙纸贴图）
+    var wtex = engine.texture('textures/sharedassets0.assets__219__wallpaper2.png');
+    var wall = new THREE.Mesh(new THREE.PlaneGeometry(40, 24),
+        new THREE.MeshStandardMaterial({ map: wtex, roughness: 0.95 }));
+    wall.position.set(0, 8, 0);
+    menuGroup.add(wall);
+    // 彩色方块堆（红绿黄蓝）
+    var palette = [0xff5a47, 0x55c04b, 0xf5c63e, 0x4a90e2];
+    var y = 0.4;
+    var blockSpecs = [{s:[2.6,0.8,2.6],c:palette[3]},{s:[0.9,0.9,0.9],c:palette[0]},
+                      {s:[0.9,0.9,0.9],c:palette[1]},{s:[0.9,0.9,0.9],c:palette[2]}];
+    var topY = 0;
+    for (var i = 0; i < blockSpecs.length; i++) {
+      var sp = blockSpecs[i];
+      var box = new THREE.Mesh(new THREE.BoxGeometry(sp.s[0], sp.s[1], sp.s[2]),
+          new THREE.MeshStandardMaterial({ color: sp.c, roughness: 0.8 }));
+      box.position.set(0, y + sp.s[1] / 2, 0);
+      menuGroup.add(box);
+      y += sp.s[1];
+      topY = y;
+    }
+    // 瓶子站在最顶上
+    var b = new THREE.Group();
+    for (var mi = 0; mi < bottle.children.length; mi++) {
+      var ch = bottle.children[mi].clone();
+      ch.matrixAutoUpdate = false;
+      b.add(ch);
+    }
+    b.position.set(0, topY + 0.4, 0.18);
+    menuGroup.add(b);
+    engine.scene.add(menuGroup);
+  }
 
   function buildBottle() {
     var P = D.prefabs.Player;
@@ -190,6 +271,8 @@
     run.level = Math.max(1, Math.min(500, n));
     UI.save.level = run.level; UI.persist();
     buildLevel(run.level);
+    run.levelStartX = 20; // 跳过 Room_Empty，从第一个房间开始计进度
+    if (menuGroup) menuGroup.visible = false;
     run.player = { x: run.spawn.x, y: run.spawn.y, z: run.spawn.z, vx: 0, vy: 0, onGround: false, jumps: 0 };
     bottleSpin = { angle: 0, target: 0, start: 0, t: 0, dur: 0, active: false };
     bottle.visible = true;
@@ -198,7 +281,7 @@
     run.state = 'play';
     UI.setHud(run.level, 0);
     UI.show('hud');
-    document.getElementById('tap-hint').style.display = 'block';
+    document.getElementById('tap-hint').classList.remove('hidden');
     camera.position.set(run.player.x + CONST.camOffset.x, CONST.camOffset.y, CONST.camOffset.z);
   }
 
@@ -217,7 +300,8 @@
       bottleSpin.target = bottleSpin.angle - 360;
       bottleSpin.active = true;
       Sound.play('jump');
-      document.getElementById('tap-hint').style.display = 'none';
+      var th = document.getElementById('tap-hint');
+      if (th) th.classList.add('hidden');
     }
   }
 
@@ -335,13 +419,22 @@
       bottle.position.set(run.player.x, run.player.y, run.player.z);
       bottle.rotation.z = bottleSpin.angle * Math.PI / 180;
     }
-    // 相机跟随（CamTrack：仅 X 跟随，offset.x=-1）
+    if (run.state === 'play' && run.levelStartX !== undefined) {
+      var total = Math.max(1, run.finishX - run.levelStartX);
+      UI.setProgress(Math.min(1, Math.max(0, (run.player.x - run.levelStartX) / total)));
+    }
+    // 相机
+    if (run.state === 'menu' && menuGroup) {
+      camera.position.set(0, 2.0, -4.0);
+      camera.lookAt(new THREE.Vector3(0.2, 1.2, 0));
+      camera.updateProjectionMatrix();
+    }
     if (!window.__freeCam && (run.state === 'play' || run.state === 'fail' || run.state === 'done')) {
-      var targetX = run.player.x - 1;
-      camera.position.x += (targetX - camera.position.x) * Math.min(1, dt * 6);
-      camera.position.y = 4.0;
-      camera.position.z = -9.5;
-      camera.lookAt(new THREE.Vector3(run.player.x + 2.5, 1.3, 0));
+      var targetX = run.player.x - 0.5;
+      camera.position.x += (targetX - camera.position.x) * Math.min(1, dt * 8);
+      camera.position.y = 1.6;
+      camera.position.z = -3.2;
+      camera.lookAt(new THREE.Vector3(run.player.x + 0.3, 1.05, 0));
     }
     if (engine) renderer.render(engine.scene, camera);
   }

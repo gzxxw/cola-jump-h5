@@ -13,35 +13,40 @@
     <div id="ui-root">
       <!-- 加载 -->
       <section class="screen" id="screen-loading">
+        <div class="splash"><span>AZUR</span><small>GAMES</small></div>
         <div class="loading-bar"><div class="loading-fill"></div></div>
         <div class="loading-text">LOADING…</div>
       </section>
       <!-- 主菜单 -->
       <section class="screen hidden" id="screen-menu">
-        <img class="menu-bg" src="assets/sprites/sharedassets0.assets__727__BgForScreen.png" alt="">
         <img class="menu-logo" src="assets/sprites/sharedassets0.assets__737__BgGameLogo.png" alt="">
-        <div class="menu-level">LEVEL <span id="menu-level-num">1</span></div>
-        <button class="btn-play" id="btn-play">
-          <img src="assets/sprites/sharedassets0.assets__744__BtnGreenBack.png" alt="">
-          <span>PLAY</span>
-        </button>
-        <div class="menu-coins">
-          <img src="assets/sprites/sharedassets0.assets__717__IcnCap.png" alt="">
-          <span id="menu-coins">0</span>
+        <div class="menu-hand"><img src="assets/sprites/sharedassets0.assets__709__Hand.png" alt=""></div>
+        <button class="icon-top left" id="btn-settings"><img src="assets/sprites/sharedassets0.assets__692__IcnSettings.png" alt=""></button>
+        <div class="menu-coins"><span id="menu-coins">0</span><img src="assets/sprites/sharedassets0.assets__697__Gem.png" alt=""></div>
+        <div class="menu-bottom">
+          <button class="b3" id="btn-ads"><img src="assets/sprites/sharedassets0.assets__731__BtnNoAds.png" alt=""><span>ADS</span></button>
+          <button class="b3 center" id="btn-play"><img src="assets/sprites/sharedassets0.assets__703__BtnSquare.png" alt=""><img class="ico" src="assets/sprites/sharedassets0.assets__702__IcnBottle.png" alt=""></button>
+          <button class="b3" id="btn-vip"><img src="assets/sprites/sharedassets0.assets__751__BtnVipModepng.png" alt=""><span>VIP</span></button>
         </div>
-        <div class="menu-gems">
-          <img src="assets/sprites/sharedassets0.assets__697__Gem.png" alt="">
-          <span id="menu-gems">0</span>
-        </div>
-        <button class="icon-btn menu-settings" id="btn-settings"><img src="assets/sprites/sharedassets0.assets__692__IcnSettings.png" alt=""></button>
-        <button class="icon-btn menu-sound" id="btn-sound"><img id="img-sound" src="assets/sprites/sharedassets0.assets__742__IcnSoundOn.png" alt=""></button>
+      </section>
+      <!-- 图鉴 -->
+      <section class="screen hidden" id="screen-vitrine">
+        <div class="vitrine-wall"></div>
+        <div class="vitrine-coins"><span id="vitrine-coins">0</span><img src="assets/sprites/sharedassets0.assets__697__Gem.png" alt=""></div>
+        <button class="icon-top left back" id="btn-vitrine-back"><img src="assets/sprites/sharedassets0.assets__716__IcnBack.png" alt=""></button>
+        <div class="vitrine-grid" id="vitrine-grid"></div>
+        <button class="btn-unlock" id="btn-unlock"><span>随机解锁 <b id="unlock-cost">1000</b></span></button>
       </section>
       <!-- 关卡内 HUD -->
       <section class="screen hidden" id="screen-hud">
-        <div class="hud-level">LEVEL <span id="hud-level-num">1</span></div>
-        <div class="hud-coins"><img src="assets/sprites/sharedassets0.assets__717__IcnCap.png" alt=""><span id="hud-coins">0</span></div>
-        <button class="icon-btn hud-back" id="btn-back"><img src="assets/sprites/sharedassets0.assets__716__IcnBack.png" alt=""></button>
-        <div class="tap-hint" id="tap-hint">TAP TO JUMP</div>
+        <div class="hud-progress" id="hud-progress">
+          <span class="num" id="prog-l">15</span>
+          <div class="bar"><div class="fill" id="prog-fill"></div><img class="barimg" src="assets/sprites/sharedassets0.assets__712__ProgressBar.png" alt=""></div>
+          <span class="num" id="prog-r">16</span>
+        </div>
+        <div class="hud-coins"><span id="hud-coins">0</span><img src="assets/sprites/sharedassets0.assets__697__Gem.png" alt=""></div>
+        <button class="round-btn" id="btn-pause"><i></i><i></i></button>
+        <div class="tap-hint" id="tap-hint"><img src="assets/sprites/sharedassets0.assets__722__Tap.png" alt=""></div>
       </section>
       <!-- 失败 -->
       <section class="screen hidden" id="screen-fail">
@@ -70,7 +75,7 @@
           <button class="btn-close" id="btn-settings-close"><img src="assets/sprites/sharedassets0.assets__723__IcnClose.png" alt=""></button>
         </div>
       </section>
-    </div>
+    <div id="toast" class="hidden"></div>
   </div>
 </div>
 <script src="js/three.min.js"></script>
