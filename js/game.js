@@ -26,9 +26,10 @@
     flips: 2,
     overshoot: 1.6,
     halfH: 0.395, halfW: 0.13,
-    // 原版 DefaultCam 世界矩阵: 位置(4.8,4.3,-8) 看向(4.97,2.22,1.78) fov60
-    camOffset: { x: 3.4, y: 4.3, z: -8 },
-    camLook: { x: 3.57, y: 2.22, z: 1.78 },
+    // 相机跟随（原版 CamTrack: 相机在玩家左后方，跟随玩家）
+    // 经软件光栅预览校准：距离 3.2、高度 2.6、看向玩家腰部，瓶子约占屏高 1/5
+    camOffset: { x: -1.0, y: 2.6, z: -3.2 },
+    camLookY: 1.2,
     camFov: 60,
     baseAspect: 1080 / 1920
   };
@@ -141,7 +142,13 @@
     camera = new THREE.PerspectiveCamera(CONST.camFov, 16 / 9, 0.3, 1000);
     camera.position.set(CONST.camOffset.x, CONST.camOffset.y, CONST.camOffset.z);
     camera.up.set(0, 1, 0);
-    camera.lookAt(new THREE.Vector3(CONST.camLook.x, CONST.camLook.y, CONST.camLook.z));
+  }
+
+  // 相机看向玩家腰部
+  function applyCamRotation() {
+    if (!run.player) return;
+    camera.up.set(0, 1, 0);
+    camera.lookAt(new THREE.Vector3(run.player.x, CONST.camLookY, 0));
   }
 
   function lookForward(fx, fy, fz) {
@@ -314,6 +321,7 @@
     UI.show('hud');
     document.getElementById('tap-hint').classList.remove('hidden');
     camera.position.set(run.player.x + CONST.camOffset.x, CONST.camOffset.y, CONST.camOffset.z);
+    applyCamRotation();
   }
 
   function tap() {
@@ -462,12 +470,12 @@
       camera.updateProjectionMatrix();
     }
     if (!window.__freeCam && (run.state === 'play' || run.state === 'fail' || run.state === 'done')) {
-      // 原版相机：玩家在画面左侧，相机在其右后方固定偏移
+      // 相机跟随玩家（左后方，平滑）
       var camX = run.player.x + CONST.camOffset.x;
-      camera.position.x += (camX - camera.position.x) * Math.min(1, dt * 6);
+      camera.position.x += (camX - camera.position.x) * Math.min(1, dt * 8);
       camera.position.y = CONST.camOffset.y;
       camera.position.z = CONST.camOffset.z;
-      camera.lookAt(new THREE.Vector3(run.player.x + CONST.camLook.x, CONST.camLook.y, CONST.camLook.z));
+      applyCamRotation();
     }
     if (engine) renderer.render(engine.scene, camera);
   }
