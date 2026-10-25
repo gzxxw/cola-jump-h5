@@ -263,11 +263,20 @@
       });
       cursor += roomLength(prefab);
     }
-    var lastStart = 0, lastPrefab = null;
-    (function () { var acc = 0; for (var i2 = 0; i2 < seq.length; i2++) { acc += roomLength(seq[i2]); lastStart = acc - roomLength(seq[i2]); lastPrefab = seq[i2]; } })();
+    var lastStart = 0, lastPrefab = null, lastLen = 0;
+    (function () {
+      var acc = 0;
+      for (var i2 = 0; i2 < seq.length; i2++) {
+        var L = roomLength(seq[i2]);
+        if (i2 === seq.length - 1) { lastStart = acc; lastLen = L; lastPrefab = seq[i2]; }
+        acc += L;
+      }
+    })();
     var lp = (lastPrefab && lastPrefab.points) || {};
     var fp = lp.FinishPos || lp.EndPoint || [4, 1.5, 0];
-    run.finishX = lastStart + fp[0];
+    // FinishPos 可能超出房间长度（原版按 EndPoint 判定），取两者较小值保证可达
+    var localFinish = Math.min(fp[0], lastLen);
+    run.finishX = lastStart + localFinish;
     run.colliders = engine.boxColliders;
     // 出生点：第一个真实房间的 SpawnPoint（与 prefab 数据一致）
     var firstRoom = seq[0] || D.prefabs.Room_Empty;
