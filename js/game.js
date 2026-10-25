@@ -26,7 +26,9 @@
     flips: 2,
     overshoot: 1.6,
     halfH: 0.395, halfW: 0.13,
-    camOffset: { x: -1, y: 4.3, z: -8 },
+    // 原版 DefaultCam 世界矩阵: 位置(4.8,4.3,-8) 看向(4.97,2.22,1.78) fov60
+    camOffset: { x: 3.4, y: 4.3, z: -8 },
+    camLook: { x: 3.57, y: 2.22, z: 1.78 },
     camFov: 60,
     baseAspect: 1080 / 1920
   };
@@ -136,10 +138,10 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     if (THREE.SRGBColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
     else if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-    camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.3, 1000);
-    camera.position.set(0, 1.6, -3.2);
+    camera = new THREE.PerspectiveCamera(CONST.camFov, 16 / 9, 0.3, 1000);
+    camera.position.set(CONST.camOffset.x, CONST.camOffset.y, CONST.camOffset.z);
     camera.up.set(0, 1, 0);
-    camera.lookAt(new THREE.Vector3(0.3, 1.05, 0));
+    camera.lookAt(new THREE.Vector3(CONST.camLook.x, CONST.camLook.y, CONST.camLook.z));
   }
 
   function lookForward(fx, fy, fz) {
@@ -154,8 +156,11 @@
     var w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    if (isPortrait()) { camera.fov = 60; }
-    else { var vfov = 45; if (camera.aspect > 1.9) vfov = 45 * Math.min(1.2, Math.sqrt(camera.aspect / 1.78)); camera.fov = vfov; }
+    // 原版竖屏 1080x1920 fov60；横屏时保持同样的水平视角，换算垂直 fov
+    var baseAspect = CONST.baseAspect;
+    var hfov = 2 * Math.atan(Math.tan(CONST.camFov * Math.PI / 360) * baseAspect);
+    var vfov = 2 * Math.atan(Math.tan(hfov / 2) / camera.aspect) * 180 / Math.PI;
+    camera.fov = Math.max(30, Math.min(100, vfov));
     camera.updateProjectionMatrix();
   }
 
@@ -443,20 +448,17 @@
     }
     // 相机
     if (run.state === 'menu' && menuGroup) {
-      if (isPortrait()) { camera.position.set(0, 3.4, -12.5); camera.lookAt(new THREE.Vector3(0, 2.6, 0)); }
-      else { camera.position.set(0, 2.8, -10.0); camera.lookAt(new THREE.Vector3(0, 2.2, 0)); }
+      camera.position.set(0, 3.6, -9.0);
+      camera.lookAt(new THREE.Vector3(0, 2.4, 0));
       camera.updateProjectionMatrix();
     }
     if (!window.__freeCam && (run.state === 'play' || run.state === 'fail' || run.state === 'done')) {
-      var targetX = run.player.x + 0.7;
-      camera.position.x += (targetX - camera.position.x) * Math.min(1, dt * 8);
-      if (isPortrait()) {
-        camera.position.y = 2.2; camera.position.z = -4.6;
-        camera.lookAt(new THREE.Vector3(run.player.x + 1.6, 1.25, 0));
-      } else {
-        camera.position.y = 1.8; camera.position.z = -3.6;
-        camera.lookAt(new THREE.Vector3(run.player.x + 1.4, 1.15, 0));
-      }
+      // 原版相机：玩家在画面左侧，相机在其右后方固定偏移
+      var camX = run.player.x + CONST.camOffset.x;
+      camera.position.x += (camX - camera.position.x) * Math.min(1, dt * 6);
+      camera.position.y = CONST.camOffset.y;
+      camera.position.z = CONST.camOffset.z;
+      camera.lookAt(new THREE.Vector3(run.player.x + CONST.camLook.x, CONST.camLook.y, CONST.camLook.z));
     }
     if (engine) renderer.render(engine.scene, camera);
   }
