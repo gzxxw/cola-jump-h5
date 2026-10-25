@@ -344,7 +344,8 @@
       var ox = Math.min(bb.maxX, c.max[0]) - Math.max(bb.minX, c.min[0]);
       var oy = Math.min(bb.maxY, c.max[1]) - Math.max(bb.minY, c.min[1]);
       var oz = Math.min(bb.maxZ, c.max[2]) - Math.max(bb.minZ, c.min[2]);
-      if (ox <= 0 || oy <= 0 || oz <= 0) continue;
+      // 三个轴都必须重叠才算碰撞（墙在 z=0.5 平面，玩家在 z≈0.18，不应被墙挡住）
+      if (ox <= 0 || oy <= 0 || oz <= 0.02) continue;
       var boxCY = (c.min[1] + c.max[1]) / 2;
       var fromTop = (p.y > boxCY) && (prev.y - halfH >= c.max[1] - 0.12 || p.vy <= 0);
       if (oy <= ox * 1.05 && oy <= oz * 1.05) {
