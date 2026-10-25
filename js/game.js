@@ -232,20 +232,20 @@
     run.coins = []; run.coinSprites = [];
     var lv = D.levels.levels[Math.max(0, Math.min(D.levels.levels.length - 1, levelNum - 1))];
     var seq = [];
-    seq.push(D.prefabs.Room_Empty);
     var fixed = D.prefabs.fixed || [];
     if (!(lv.rooms && lv.rooms.length) && fixed.length) {
       // 教程关（levelsNums 为空）：原版用手工固定房间，9 间/关
       var half = Math.ceil(fixed.length / 2);
       var part = (levelNum <= 1) ? fixed.slice(0, half) : fixed.slice(half, half * 2);
       part.forEach(function (p) { seq.push(p); });
+    } else {
+      (lv.rooms || []).forEach(function (name) {
+        var seg = null;
+        for (var i = 0; i < D.prefabs.segments.length; i++) { if (D.prefabs.segments[i].name === name) { seg = D.prefabs.segments[i]; break; } }
+        if (seg) seq.push(seg);
+      });
     }
-    (lv.rooms || []).forEach(function (name) {
-      var seg = null;
-      for (var i = 0; i < D.prefabs.segments.length; i++) { if (D.prefabs.segments[i].name === name) { seg = D.prefabs.segments[i]; break; } }
-      if (seg) seq.push(seg);
-    });
-    if (D.prefabs.Room_Finish) seq.push(D.prefabs.Room_Finish);
+    if (!seq.length) seq.push(D.prefabs.Room_Empty);
     var cursor = 0;
     run.rooms = [];
     for (var i = 0; i < seq.length; i++) {
@@ -260,11 +260,13 @@
     }
     var lastStart = 0, lastPrefab = null;
     (function () { var acc = 0; for (var i2 = 0; i2 < seq.length; i2++) { acc += roomLength(seq[i2]); lastStart = acc - roomLength(seq[i2]); lastPrefab = seq[i2]; } })();
-    var fp = (lastPrefab && lastPrefab.points && lastPrefab.points.FinishPos) || [4, 1.5, 0];
+    var lp = (lastPrefab && lastPrefab.points) || {};
+    var fp = lp.FinishPos || lp.EndPoint || [4, 1.5, 0];
     run.finishX = lastStart + fp[0];
     run.colliders = engine.boxColliders;
-    // 出生点
-    var sp = (D.prefabs.Room_Empty.points && D.prefabs.Room_Empty.points.SpawnPoint) || [1.4, 6, 0.182];
+    // 出生点：第一个真实房间的 SpawnPoint（与 prefab 数据一致）
+    var firstRoom = seq[0] || D.prefabs.Room_Empty;
+    var sp = (firstRoom.points && firstRoom.points.SpawnPoint) || [1.4, 2.0, 0.182];
     run.spawn = { x: sp[0], y: sp[1], z: sp[2] || 0.182 };
     // 金币 sprite
     var coinTex = engine.texture('sprites/sharedassets0.assets__717__IcnCap.png');
@@ -286,7 +288,7 @@
     run.level = Math.max(1, Math.min(500, n));
     UI.save.level = run.level; UI.persist();
     buildLevel(run.level);
-    run.levelStartX = 20; // 跳过 Room_Empty，从第一个房间开始计进度
+    run.levelStartX = 0;
     if (menuGroup) menuGroup.visible = false;
     run.player = { x: run.spawn.x, y: run.spawn.y, z: run.spawn.z, vx: 0, vy: 0, onGround: false, jumps: 0 };
     bottleSpin = { angle: 0, target: 0, start: 0, t: 0, dur: 0, active: false };
