@@ -26,10 +26,10 @@
     flips: 2,
     overshoot: 1.6,
     halfH: 0.395, halfW: 0.13,
-    // 相机跟随（原版 CamTrack: 相机在玩家左后方，跟随玩家）
-    // 经软件光栅预览校准：距离 3.2、高度 2.6、看向玩家腰部，瓶子约占屏高 1/5
-    camOffset: { x: -1.0, y: 2.6, z: -3.2 },
-    camLookY: 1.2,
+    // 相机：水平正对场景（不倾斜），在玩家后方固定偏移
+    // 距离 3.4、高度 2.2，视线水平略微下倾，瓶子约占屏高 1/5
+    camOffset: { x: 0.3, y: 2.2, z: -3.4 },
+    camLookY: 1.5,
     camFov: 60,
     baseAspect: 1080 / 1920
   };
@@ -77,22 +77,40 @@
 
   function boot() {
     try { if (localStorage.getItem('forceLandscape') === '1') window.FORCE_LANDSCAPE = FORCE_LANDSCAPE = true; } catch (e) {}
-    Promise.all([
-      loadJSON('assets/data/meshes.json'),
-      loadJSON('assets/data/materials.json'),
-      loadJSON('assets/data/prefabs.json'),
-      loadJSON('assets/data/levels.json'),
-      loadJSON('assets/data/room_order.json')
-    ]).then(function (res) {
-      D = { meshes: res[0], materials: res[1], prefabs: res[2], levels: res[3], roomOrder: res[4] };
-      setLoading(0.5);
+    // 分阶段加载，实时反馈进度（不让玩家干等）
+    var steps = [
+      ['assets/data/meshes.json', 'meshes'],
+      ['assets/data/materials.json', 'materials'],
+      ['assets/data/prefabs.json', 'prefabs'],
+      ['assets/data/levels.json', 'levels'],
+      ['assets/data/room_order.json', 'roomOrder']
+    ];
+    D = {};
+    var loaded = 0;
+    function nextStep() {
+      if (loaded >= steps.length) { afterLoad(); return; }
+      var st = steps[loaded];
+      loadJSON(st[0]).then(function (data) {
+        D[st[1]] = data;
+        loaded++;
+        setLoading(0.15 + 0.55 * (loaded / steps.length));
+        nextStep();
+      }).catch(function (e) {
+        document.querySelector('.loading-text').textContent = 'LOAD ERROR: ' + st[1];
+        console.error(e);
+      });
+    }
+    nextStep();
+
+    function afterLoad() {
+      setLoading(0.75);
       initRenderer();
       engine = new Engine(THREE, D);
       engine.renderer = renderer;
       window.__engineRef = engine; window.__renderer = renderer;
       engine.scene.background = new THREE.Color(0.8479, 0.8961, 0.9717);
       buildBottle();
-      setLoading(0.8);
+      setLoading(0.9);
       UI.init({
         play: function () { startLevel(UI.save.level); },
         retry: function () { startLevel(run.level); },
@@ -126,10 +144,7 @@
       run.state = 'menu';
       setLoading(1);
       animate();
-    }).catch(function (e) {
-      console.error(e);
-      document.querySelector('.loading-text').textContent = 'ERROR: ' + e.message;
-    });
+    }
   }
 
   function initRenderer() {
@@ -144,11 +159,11 @@
     camera.up.set(0, 1, 0);
   }
 
-  // 相机看向玩家腰部
+  // 相机保持水平朝向：看向玩家正前方（同一 y 高度），避免画面倾斜
   function applyCamRotation() {
     if (!run.player) return;
     camera.up.set(0, 1, 0);
-    camera.lookAt(new THREE.Vector3(run.player.x, CONST.camLookY, 0));
+    camera.lookAt(new THREE.Vector3(run.player.x + CONST.camOffset.x, CONST.camLookY, 0));
   }
 
   function lookForward(fx, fy, fz) {
@@ -289,19 +304,39 @@
     var firstRoom = seq[0] || D.prefabs.Room_Empty;
     var sp = (firstRoom.points && firstRoom.points.SpawnPoint) || [1.4, 2.0, 0.182];
     run.spawn = { x: sp[0], y: sp[1], z: sp[2] || 0.182 };
-    // 金币 sprite
-    var coinTex = engine.texture('sprites/sharedassets0.assets__717__IcnCap.png');
+    // 金币：用原版 Bottle_Cap 3D 网格（不是 UI 图标）
+    var capMeshId = null, capMatId = null;
+    for (var pi = 0; pi < (D.prefabs.Player.meshes || []).length; pi++) {
+      var pm = D.prefabs.Player.meshes[pi];
+      if (pm.node === 'Items_Beer_02') { capMatId = pm.mats[0]; }
+    }
+    // 从房间 prefab 里找 Bottle_Cap 的网格
+    for (var ri = 0; ri < D.prefabs.segments.length && !capMeshId; ri++) {
+      var rm = D.prefabs.segments[ri].meshes || [];
+      for (var mi = 0; mi < rm.length; mi++) {
+        if (rm[mi].node === 'Bottle_Cap') { capMeshId = rm[mi].m; break; }
+      }
+    }
+    var coinGeo = capMeshId ? engine.geometry(capMeshId) : null;
+    var coinMat = new THREE.MeshStandardMaterial({ color: 0xffc21a, metalness: 0.45, roughness: 0.35 });
     for (var ci = 0; ci < run.coins.length; ci++) {
       var c = run.coins[ci];
-      var mat = new THREE.SpriteMaterial({ map: coinTex, transparent: true, depthWrite: false });
-      var spr = new THREE.Sprite(mat);
+      var spr;
+      if (coinGeo) {
+        spr = new THREE.Mesh(coinGeo, coinMat);
+        spr.scale.set(1.1, 1.1, 1.1);
+        // 让金币面向镜头（绕 X 轴立起来）
+        spr.rotation.x = Math.PI / 2;
+      } else {
+        var coinTex = engine.texture('sprites/sharedassets0.assets__717__IcnCap.png');
+        spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: coinTex, transparent: true, depthWrite: false }));
+        spr.scale.set(0.5, 0.5, 1);
+      }
       spr.position.set(c.x, c.y, c.z);
-      spr.scale.set(0.8, 0.8, 1);
       spr.visible = false;
       engine.scene.add(spr);
       run.coinSprites.push(spr);
     }
-    // 显示金币
     for (var k = 0; k < run.coinSprites.length; k++) run.coinSprites[k].visible = true;
   }
 
@@ -407,7 +442,8 @@
       var co = run.coins[q];
       if (co.taken) continue;
       var dx = co.x - p.x, dy = co.y - p.y;
-      if (dx * dx + dy * dy < 1.1) {
+      // 3D 距离判定（瓶子半高 0.4 + 金币半径 0.3 + 余量）
+      if (dx * dx + dy * dy < 1.44) {
         co.taken = true; run.coinsGot++; Sound.play('coin');
         run.coinSprites[q].visible = false;
         UI.setHud(run.level, run.coinsGot);
