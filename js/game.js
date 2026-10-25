@@ -108,6 +108,7 @@
       engine = new Engine(THREE, D);
       engine.renderer = renderer;
       window.__engineRef = engine; window.__renderer = renderer;
+      window.__cameraRef = camera; window.__sceneRef = engine.scene;
       engine.scene.background = new THREE.Color(0.8479, 0.8961, 0.9717);
       buildBottle();
       setLoading(0.9);
@@ -157,6 +158,8 @@
     camera = new THREE.PerspectiveCamera(CONST.camFov, 16 / 9, 0.3, 1000);
     camera.position.set(CONST.camOffset.x, CONST.camOffset.y, CONST.camOffset.z);
     camera.up.set(0, 1, 0);
+    // 立即设置一次尺寸，确保 drawingBuffer 非 0
+    resize();
   }
 
   // 相机保持水平朝向：看向玩家正前方（同一 y 高度），避免画面倾斜
@@ -175,8 +178,11 @@
   window.FORCE_LANDSCAPE = false; var FORCE_LANDSCAPE = false;
   function isPortrait() { return !FORCE_LANDSCAPE && window.innerHeight > window.innerWidth; }
   function resize() {
-    var w = window.innerWidth, h = window.innerHeight;
-    renderer.setSize(w, h, false);
+    var w = window.innerWidth || document.documentElement.clientWidth || 420;
+    var h = window.innerHeight || document.documentElement.clientHeight || 887;
+    if (w < 10) w = 420;
+    if (h < 10) h = 887;
+    renderer.setSize(w, h, true);
     camera.aspect = w / h;
     // 原版竖屏 1080x1920 fov60；横屏时保持同样的水平视角，换算垂直 fov
     var baseAspect = CONST.baseAspect;
@@ -192,36 +198,45 @@
   function buildMenuScene() {
     if (!engine || menuGroup) return;
     menuGroup = new THREE.Group();
-    // 砖墙（原版墙纸贴图）
+    // 1) 砖墙背景（用原版墙纸贴图，铺满整个视野）
     var wtex = engine.texture('textures/sharedassets0.assets__219__wallpaper2.png');
-    var wall = new THREE.Mesh(new THREE.PlaneGeometry(40, 24),
-        new THREE.MeshStandardMaterial({ map: wtex, roughness: 0.95 }));
-    wall.position.set(0, 8, 0);
+    if (wtex) { wtex.wrapS = wtex.wrapT = THREE.RepeatWrapping; wtex.repeat.set(4, 3); }
+    var wall = new THREE.Mesh(new THREE.PlaneGeometry(60, 40),
+        new THREE.MeshStandardMaterial({ map: wtex, color: 0xffffff, roughness: 0.95 }));
+    wall.position.set(0, 10, 2);
     menuGroup.add(wall);
-    // 彩色方块堆（红绿黄蓝）
-    var palette = [0xff5a47, 0x55c04b, 0xf5c63e, 0x4a90e2];
-    var y = 0.4;
-    var blockSpecs = [{s:[2.6,0.8,2.6],c:palette[3]},{s:[0.9,0.9,0.9],c:palette[0]},
-                      {s:[0.9,0.9,0.9],c:palette[1]},{s:[0.9,0.9,0.9],c:palette[2]}];
-    var topY = 0;
-    for (var i = 0; i < blockSpecs.length; i++) {
-      var sp = blockSpecs[i];
+    // 2) 地面（浅蓝紫，与原版一致）
+    var floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 30),
+        new THREE.MeshStandardMaterial({ color: 0x9fa8d8, roughness: 0.9 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0, -6);
+    menuGroup.add(floor);
+    // 3) 彩色方块塔（原版主菜单：瓶子站在 4 块彩色积木上）
+    var palette = [0xd94b3f, 0x4f9c46, 0xd8a92c, 0x8b5cb8];
+    var y = 0;
+    var specs = [{s:[1.5,0.5,1.5], c:palette[3]}, {s:[0.55,0.55,0.55], c:palette[0]},
+                 {s:[0.55,0.55,0.55], c:palette[1]}, {s:[0.55,0.55,0.55], c:palette[2]}];
+    for (var i = 0; i < specs.length; i++) {
+      var sp = specs[i];
       var box = new THREE.Mesh(new THREE.BoxGeometry(sp.s[0], sp.s[1], sp.s[2]),
-          new THREE.MeshStandardMaterial({ color: sp.c, roughness: 0.8 }));
+          new THREE.MeshStandardMaterial({ color: sp.c, roughness: 0.75 }));
       box.position.set(0, y + sp.s[1] / 2, 0);
       menuGroup.add(box);
       y += sp.s[1];
-      topY = y;
     }
-    // 瓶子站在最顶上
-    var b = new THREE.Group();
-    for (var mi = 0; mi < bottle.children.length; mi++) {
-      var ch = bottle.children[mi].clone();
-      ch.matrixAutoUpdate = false;
-      b.add(ch);
+    // 4) 瓶子站在塔顶
+    if (bottle && bottle.children.length) {
+      var b = bottle.clone(true);
+      b.visible = true;
+      b.position.set(0, y, 0.1);
+      b.rotation.set(0, 0, 0);
+      menuGroup.add(b);
     }
-    b.position.set(0, topY + 0.4, 0.18);
-    menuGroup.add(b);
+    // 5) 灯光（菜单独立打光，保证亮度）
+    var ml = new THREE.DirectionalLight(0xffffff, 1.15);
+    ml.position.set(3, 8, -4); menuGroup.add(ml);
+    var mh = new THREE.HemisphereLight(0xffffff, 0xb8b0a0, 1.05);
+    menuGroup.add(mh);
     engine.scene.add(menuGroup);
   }
 
@@ -501,8 +516,8 @@
     }
     // 相机
     if (run.state === 'menu' && menuGroup) {
-      camera.position.set(0, 3.6, -9.0);
-      camera.lookAt(new THREE.Vector3(0, 2.4, 0));
+      camera.position.set(0, 2.2, -5.0);
+      camera.lookAt(new THREE.Vector3(0, 1.6, 0));
       camera.updateProjectionMatrix();
     }
     if (!window.__freeCam && (run.state === 'play' || run.state === 'fail' || run.state === 'done')) {
@@ -555,6 +570,11 @@
   var thumbCache = {};
   function skinThumb(png) {
     if (thumbCache[png] !== undefined) return thumbCache[png];
+    // WebGL 不可用时直接返回 null（走贴图回退）
+    try {
+      var _gl = renderer && renderer.getContext && renderer.getContext();
+      if (!_gl || _gl.isContextLost()) { thumbCache[png] = null; return null; }
+    } catch (e) { thumbCache[png] = null; return null; }
     try {
       var geo = null;
       for (var i = 0; i < D.prefabs.Player.meshes.length; i++) {
